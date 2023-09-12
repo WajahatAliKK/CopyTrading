@@ -2,3 +2,5 @@ alembic
 .venv
 alembic.ini
 bot/db_client.py
+bot/utils/config.py
+bot/utils/config_.py
