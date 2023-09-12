@@ -1,0 +1,4 @@
+alembic
+.venv
+alembic.ini
+bot/db_client.py
