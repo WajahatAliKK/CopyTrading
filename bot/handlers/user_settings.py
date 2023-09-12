@@ -1,4 +1,4 @@
-from aiogram import types
+from aiogram import types , Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import ForceReply
 
@@ -7,6 +7,8 @@ from bot.keyboards.paid_user_kb import paid_user_keyboard
 
 
 from bot.states.sniperBot import UserSettingsState
+from aiogram.types import  CallbackQuery
+
 from bot.db_client import db
 from aiogram.filters.callback_data import CallbackData
 from database.user_functions import get_user_by_chat_id, toggle_user_active
@@ -19,8 +21,17 @@ from bot.callback_factories.user_settings_action import UserSettingsAction
 from bot.handlers.routers import user_settings_menu, wallet_menu
 from aiogram import F
 from bot.db_client import db
+from aiogram.utils.keyboard import InlineKeyboardBuilder 
 
 from bot.keyboards.menu_keyboard import ask_for_network, back_to_main_kb
+
+
+
+# class for the start copy trade button 
+class btnfortradecopy(CallbackData , prefix = 'call'):
+    strt : str
+    endno : int
+
 
 @user_settings_menu.callback_query(StartAction.filter(F.type=="bot_active"), StateFilter("*"))
 async def bot_active_cb(query: types.CallbackQuery, callback_data: dict, state: FSMContext):
@@ -136,6 +147,16 @@ async def hp_toggle_cb(query: types.CallbackQuery, callback_data: CallbackData, 
     await query.message.edit_text(text=text1, reply_markup=user_settings_keyboard(network=new_settings.network))
     await query.answer(text="Scam Detection Settings changed!")
 
+# for starting of copy trading  buttons 
+@user_settings_menu.callback_query(UserSettingsAction.filter(F.column=="startcopytradebtn"))
+async def start_copy_trade_btn(query:CallbackQuery):
+    add_address = InlineKeyboardBuilder()
+    add_address.button(text="Add copy Address" , callback_data=btnfortradecopy(strt="addaddress" , endno=1))
+    add_address.button(text="Delete copy Address" , callback_data=btnfortradecopy(strt="deleteaddress" , endno=1))
+    add_address.button(text="🔙 Back Menu", callback_data=StartAction(type="user_settings").pack())
+    add_address.adjust(2,1)
+    await query.message.delete()
+    await query.message.answer(f"Start copy adding or deleting copy address " , reply_markup=add_address.as_markup())
 
 @user_settings_menu.callback_query(UserSettingsAction.filter(F.column=="auto_sell"), StateFilter("*"))
 async def auto_sell_cb(query: types.CallbackQuery, callback_data: CallbackData, state: FSMContext):
@@ -371,3 +392,30 @@ async def blocks_to_wait(message: types.Message, state: FSMContext):
         print(e)
         await message.reply("Please provide a valid number e.g. 2, 3 etc")  
     await state.clear()
+
+
+# add copy  address 
+@user_settings_menu.callback_query(btnfortradecopy.filter(F.strt=="addaddress"))
+async def addaddress(query:CallbackQuery , state: FSMContext)->None:
+    await query.message.reply(f"you are going to add the address " , reply_markup=ForceReply(input_field_placeholder="0x41qwd...qweq456"))
+    await state.set_state('addaddress')
+
+
+
+
+# delete copy address 
+@user_settings_menu.callback_query(btnfortradecopy.filter(F.strt=="deleteaddress"))
+async def deleteAddress(query:CallbackQuery , state:FSMContext)->None:
+    await query.message.reply(f"Enter the address to delete " , reply_markup=ForceReply(input_field_placeholder="0x41qwd...qweq456"))
+    await state.set_state('deleteaddress')
+
+
+@user_settings_menu.message(StateFilter("addaddress"))
+async def handle_message_for_addaddress(message: types.Message)->None:
+    user_text = message.text
+    print(user_text)
+
+@user_settings_menu.message(StateFilter("deleteaddress"))
+async def handle_message_for_deleteaddress(message:types.Message)->None:
+    user_text = message.text
+    print(user_text)

@@ -29,6 +29,10 @@ def user_settings_keyboard(network):
                 InlineKeyboardButton(text="🧐 Scam Spotter", callback_data=UserSettingsAction(column="honeypot_settings", network=network).pack())
             ],
 
+            [
+                InlineKeyboardButton(text="© Start Copy Trading", callback_data=UserSettingsAction(column="startcopytradebtn" , network=network).pack())
+            ],
+
             [InlineKeyboardButton(text="🏡 Home Menu", callback_data=Back(type="main_menu").pack())],
         ]
     )
