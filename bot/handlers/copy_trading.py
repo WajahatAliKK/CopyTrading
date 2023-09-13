@@ -1,14 +1,26 @@
 from web3 import Web3, HTTPProvider
-# from bot.utils.config import ETH_INFURA_URL
+# from bot.utils.config import *
+import json
+import os
 import time
+
+# Specify the path to your JSON file
+json_file_path = 'bot/utils/uniswap_v2/uniswap_v2_router_abi.json'
+UNISWAP_V2_ROUTER_ABI = ''
+# Open the file and load the JSON data
+with open(json_file_path, 'r') as json_file:
+    UNISWAP_V2_ROUTER_ABI = json.load(json_file)
+
 ETH_INFURA_URL = "https://eth-mainnet.g.alchemy.com/v2/1HZEUwVATL4Z6hzVdaeXWrJ6z6nLAAPu"
+UNISWAP_V2_ROUTER_ADDRESS = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
 
 # Replace with your Ethereum node URL (e.g., Infura)
 ethereum_node_url = ETH_INFURA_URL
 
 # Initialize Web3 with an Ethereum node
 w3 = Web3(HTTPProvider(ethereum_node_url))
-
+router_contract = w3.eth.contract(address=UNISWAP_V2_ROUTER_ADDRESS, abi=UNISWAP_V2_ROUTER_ABI)
+# router_contract.functions.swapExactTokensForTokens(0, 0, 0, 0, 0).selector.hex() 
 # Replace these with the addresses of the leader and follower
 leader_address = "0x28C6c06298d514Db089934071355E5743bf21d60"
 follower_address = "0xFollowerAddress"
@@ -16,32 +28,72 @@ follower_address = "0xFollowerAddress"
 # Create a private key (for demonstration purposes, generate a private key securely in a real scenario)
 private_key = "YOUR_PRIVATE_KEY"
 
+# swapETHForExactTokens = '0xfb3bdb41'
+# swapExactTokensForETHSupportingFeeOnTransferTokens = '0x791ac947'
+# swapExactETHForTokensSupportingFeeOnTransferTokens = '0xb6f9de95'
+# swapExactTokensForETH = '0x18cbafe5'
+# swapExactETHForTokens = '0x7ff36ab5'
+
+swapETHForExactTokens = b'\xfb\x3b\xdb\x41'
+swapExactTokensForETHSupportingFeeOnTransferTokens = b'\x79\x1a\xc9\x47'
+swapExactETHForTokensSupportingFeeOnTransferTokens = b'\xb6\xf9\xde\x95'
+swapExactTokensForETH = b'\x18\xcb\xaf\xe5'
+swapExactETHForTokens = b'\x7f\xf3\x6a\xb5'
 # Function to check for and replicate trades
 def check_and_replicate_trades():
     latest_block = w3.eth.block_number
     last_checked_block = latest_block
 
-    # while True:
+    while True:
         # Get new blocks since the last checked block
-    latest_block = w3.eth.block_number
-    for block_number in range(last_checked_block + 1, latest_block + 1):
-        block = w3.eth.get_block(block_number, full_transactions=True)
+        latest_block = w3.eth.block_number
+        if latest_block > last_checked_block:
+            for block_number in range(last_checked_block + 1, latest_block + 1):
+                print(block_number)
+                if block_number: 
+                    block = w3.eth.get_block(block_number, full_transactions=True)
+                    for tx in block.transactions:
+                        # print('From : ', tx['from'])
+                        # print('To : ', tx['to'])
+                        if 'input' in tx and (
+                            tx['input'].startswith(swapETHForExactTokens) or
+                            tx['input'].startswith(swapExactTokensForETHSupportingFeeOnTransferTokens) or
+                            tx['input'].startswith(swapExactETHForTokensSupportingFeeOnTransferTokens) or
+                            tx['input'].startswith(swapExactTokensForETH) or
+                            tx['input'].startswith(swapExactETHForTokens)
+                            ):
+                            # Identify trades based on specific criteria (e.g., function calls or contract interactions)
+                            # For example, check if the transaction interacts with a specific smart contract.
+                            # You may need to inspect the transaction data and use ABI for decoding.
+                            # If a trade condition is met, replicate the trade.
+                            # Note: This is a highly simplified example and actual trade conditions can be complex.
+                            tx_input = tx['input']
+                            # os.system('cls')
+                            # print('Detected input --- ',tx_input)
+                            decoded_input = router_contract.decode_function_input(tx['input'])
+                            # print('Decoded input tx --- ',decoded_input)
+                            decoded_args = decoded_input[1]
+                            decoded_func = decoded_input[0]
+                            print(decoded_args)
+                            
+                            class_name = decoded_func.__class__.__name__
+                            print("function name: ", class_name)
+                            
+                            amountOutMin = decoded_args['amountOutMin']
+                            path = decoded_args['path']
+                            to = decoded_args['to']
+                            deadline = decoded_args['deadline']
 
-        for tx in block.transactions:
-            print(tx)
-            if 'to' in tx and tx['to'].lower() == leader_address.lower():
-                # Identify trades based on specific criteria (e.g., function calls or contract interactions)
-                # For example, check if the transaction interacts with a specific smart contract.
-                # You may need to inspect the transaction data and use ABI for decoding.
-                # If a trade condition is met, replicate the trade.
-                # Note: This is a highly simplified example and actual trade conditions can be complex.
-                tx_input = tx['input']
-                print('Detected TX --- ',tx)
-                if is_trade(tx):
-                    replicate_trade(tx)
+                            
+                            print("amountOutMin:", amountOutMin)
+                            print("path:", path)
+                            print("to:", to)
+                            print("deadline:", deadline)
+                            if is_trade(tx):
+                                replicate_trade(tx)
 
-    last_checked_block = latest_block
-    # time.sleep(60)  # Check for new blocks every minute (adjust as needed)
+            last_checked_block = latest_block
+            time.sleep(5)  # Check for new blocks every minute (adjust as needed)
 
 # Define your trade condition logic here
 def is_trade(tx):
