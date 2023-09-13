@@ -62,11 +62,11 @@ def check_and_replicate_trades():
                             tx['input'].startswith(swapExactTokensForETH) or
                             tx['input'].startswith(swapExactETHForTokens)
                             ):
-                            # Identify trades based on specific criteria (e.g., function calls or contract interactions)
-                            # For example, check if the transaction interacts with a specific smart contract.
-                            # You may need to inspect the transaction data and use ABI for decoding.
-                            # If a trade condition is met, replicate the trade.
-                            # Note: This is a highly simplified example and actual trade conditions can be complex.
+                            # Identifying trades based on specific criteria (e.g., function calls or contract interactions)
+                            # Checking if the transaction interacts with a router contract of uniswap v2.
+                            # Inspecting the transaction data and using ABI for decoding.
+                            # If a trade condition is met, replicating the trade.
+                            # Note: This is a highly inplemented as per our requirement example and actual trade conditions can be complex.
                             tx_input = tx['input']
                             # os.system('cls')
                             # print('Detected input --- ',tx_input)
@@ -74,23 +74,12 @@ def check_and_replicate_trades():
                             # print('Decoded input tx --- ',decoded_input)
                             decoded_args = decoded_input[1]
                             decoded_func = decoded_input[0]
-                            print(decoded_args)
                             
                             class_name = decoded_func.__class__.__name__
                             print("function name: ", class_name)
                             
-                            amountOutMin = decoded_args['amountOutMin']
-                            path = decoded_args['path']
-                            to = decoded_args['to']
-                            deadline = decoded_args['deadline']
-
-                            
-                            print("amountOutMin:", amountOutMin)
-                            print("path:", path)
-                            print("to:", to)
-                            print("deadline:", deadline)
-                            if is_trade(tx):
-                                replicate_trade(tx)
+                            for key, value in decoded_args.items():
+                                print(f"{key} : {value}")
 
             last_checked_block = latest_block
             time.sleep(5)  # Check for new blocks every minute (adjust as needed)
