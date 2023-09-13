@@ -67,11 +67,7 @@ def check_and_replicate_trades():
                             # Inspecting the transaction data and using ABI for decoding.
                             # If a trade condition is met, replicating the trade.
                             # Note: This is a highly inplemented as per our requirement example and actual trade conditions can be complex.
-                            tx_input = tx['input']
-                            # os.system('cls')
-                            # print('Detected input --- ',tx_input)
                             decoded_input = router_contract.decode_function_input(tx['input'])
-                            # print('Decoded input tx --- ',decoded_input)
                             decoded_args = decoded_input[1]
                             decoded_func = decoded_input[0]
                             
