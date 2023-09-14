@@ -1,14 +1,16 @@
 from aiogram import types , Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import ForceReply
+import re
 
-from bot.keyboards.settings_keyboard import user_settings_keyboard
+from bot.keyboards.settings_keyboard import user_settings_keyboard , addaddresskeyboard ,backbutton_to_setting
 from bot.keyboards.paid_user_kb import paid_user_keyboard
-
-
+from database.copytradingaddress import addcopytradingaddress  , deletecopyaddress , get_no_of_addresses , updateCopyTradePercentage , get_percentgae_of_copy_trade
+from database.models import UserSetting , User 
 from bot.states.sniperBot import UserSettingsState
 from aiogram.types import  CallbackQuery
-
+from sqlalchemy import select, insert, update, delete
+from sqlalchemy.orm import selectinload 
 from bot.db_client import db
 from aiogram.filters.callback_data import CallbackData
 from database.user_functions import get_user_by_chat_id, toggle_user_active
@@ -147,16 +149,6 @@ async def hp_toggle_cb(query: types.CallbackQuery, callback_data: CallbackData, 
     await query.message.edit_text(text=text1, reply_markup=user_settings_keyboard(network=new_settings.network))
     await query.answer(text="Scam Detection Settings changed!")
 
-# for starting of copy trading  buttons 
-@user_settings_menu.callback_query(UserSettingsAction.filter(F.column=="startcopytradebtn"))
-async def start_copy_trade_btn(query:CallbackQuery):
-    add_address = InlineKeyboardBuilder()
-    add_address.button(text="Add copy Address" , callback_data=btnfortradecopy(strt="addaddress" , endno=1))
-    add_address.button(text="Delete copy Address" , callback_data=btnfortradecopy(strt="deleteaddress" , endno=1))
-    add_address.button(text="🔙 Back Menu", callback_data=StartAction(type="user_settings").pack())
-    add_address.adjust(2,1)
-    await query.message.delete()
-    await query.message.answer(f"Start copy adding or deleting copy address " , reply_markup=add_address.as_markup())
 
 @user_settings_menu.callback_query(UserSettingsAction.filter(F.column=="auto_sell"), StateFilter("*"))
 async def auto_sell_cb(query: types.CallbackQuery, callback_data: CallbackData, state: FSMContext):
@@ -394,6 +386,77 @@ async def blocks_to_wait(message: types.Message, state: FSMContext):
     await state.clear()
 
 
+
+# for update copy trade percentage 
+@user_settings_menu.callback_query(UserSettingsAction.filter(F.column == "updatecopytradepercentage"))
+async def updatecopytradepercentage(query:CallbackQuery , state:FSMContext):
+    users_IID = query.from_user.id
+    await query.message.reply(f"UPDATE THE PERCENTAGE OF ETHERUM YOU WANT TO INVEST ! " , reply_markup=ForceReply(input_field_placeholder="Enter percentage %"))
+    await state.set_state('percentage_of_etherum_update')
+
+@user_settings_menu.message(StateFilter("percentage_of_etherum_update"))
+async def percentage_of_etherum_update(message:types.Message)->None:
+    userId = message.from_user.id
+    percentage = message.text
+    await updateCopyTradePercentage(userId , percentage )
+    backto_settings = backbutton_to_setting()
+    await message.answer(f"YOUR INVESTMENT OF ETHERUM IS UPDATED NOW!" , reply_markup=backto_settings.as_markup())
+
+
+# # for starting copy trading percentage taking 
+@user_settings_menu.callback_query(UserSettingsAction.filter(F.column=="startcopytradebtn"))
+async def startcopytradebtn(query:CallbackQuery , state:FSMContext):
+#     # if the percentage is given already do not use that function
+    users_IID = query.from_user.id
+  
+    user_percentage = await get_percentgae_of_copy_trade(users_IID)
+    if user_percentage:
+        user_id = query.from_user.id
+       
+        
+        total_Adress,len = await get_no_of_addresses(user_id)
+        add_address = addaddresskeyboard(len)
+        await query.message.delete()
+        if len == 0:
+            await query.message.answer(f"REGISTERED COPY TRADING ADDRESSES ARE {len} \n YOUR INVESTMENT PERCENTAGE : {user_percentage}" , reply_markup=add_address.as_markup())
+        elif len == 1:
+            await query.message.answer(f"REGISTERED COPY TRADING ADDRESSES ARE {len} \n YOUR INVESTMENT PERCENTAGE : {user_percentage} \n 1):YOUR EXISTING WALLET ADDRESS IS: ❕❗ {total_Adress[0]}" , reply_markup=add_address.as_markup())
+        else:
+            await query.message.answer(f"REGISTERED COPY TRADING ADDRESSES LIMIT IS EXCEEDED: \n YOUR INVESTMENT PERCENTAGE : {user_percentage}   \n 1):YOUR EXISTING WALLET ADDRESS IS: ❕❗ {total_Adress[0]} \n 2):YOUR EXISTING SECOND WALLET ADDRESSS: ❕❗ {total_Adress[1]} " , reply_markup=add_address.as_markup())
+
+    else: 
+       
+
+
+        await query.message.reply(f"ENTER THE PERCENTAGE OF ETHERUM YOU WANT TO INVEST! " , reply_markup=ForceReply(input_field_placeholder="Enter percentage %"))
+        await state.set_state('percentage_of_etherum')
+    
+
+# for starting of copy trading  buttons 
+@user_settings_menu.message(StateFilter("percentage_of_etherum"))
+async def start_copy_trade_btn(message:types.Message)->None:
+    
+    userId = message.from_user.id
+    percentage = message.text
+    
+
+    await updateCopyTradePercentage(userId , percentage )
+
+    total_Adress,len = await get_no_of_addresses(userId)
+    
+    
+    add_address = addaddresskeyboard(len)
+
+    await message.delete()
+    
+    if len == 0:
+        await message.answer(f"REGISTERED COPY TRADING ADDRESSES ARE  {len} \n YOUR INVESTMENT PERCENTAGE : {percentage} " , reply_markup=add_address.as_markup())
+    elif len == 1:
+        await message.answer(f"REGISTERED COPY TRADING ADDRESSES ARE {len} \n YOUR INVESTMENT PERCENTAGE : {percentage} \n 1):YOUR EXISTING WALLET ADDRESS IS: ❕❗ {total_Adress[0]}" , reply_markup=add_address.as_markup())
+    else:
+        await message.answer(f"REGISTERED COPY TRADING ADDRESSES LIMIT IS EXCEEDED: \n YOUR INVESTMENT PERCENTAGE : {percentage}   \n 1):YOUR EXISTING WALLET ADDRESS IS: ❕❗ {total_Adress[0]} \n 2):YOUR EXISTING SECOND WALLET ADDRESSS: ❕❗ {total_Adress[1]} " , reply_markup=add_address.as_markup())
+
+
 # add copy  address 
 @user_settings_menu.callback_query(btnfortradecopy.filter(F.strt=="addaddress"))
 async def addaddress(query:CallbackQuery , state: FSMContext)->None:
@@ -410,12 +473,46 @@ async def deleteAddress(query:CallbackQuery , state:FSMContext)->None:
     await state.set_state('deleteaddress')
 
 
+
+
 @user_settings_menu.message(StateFilter("addaddress"))
 async def handle_message_for_addaddress(message: types.Message)->None:
+    backing_to_settings = InlineKeyboardBuilder()
+    backing_to_settings.button(text="🔙 Back Menu", callback_data=StartAction(type="user_settings").pack())
+    backing_to_settings.adjust(1)
+
+
     user_text = message.text
-    print(user_text)
+    user_id = message.from_user.id
+
+    pattern_address = re.compile(r'^0x[a-fA-F0-9]{40}$')
+    is_valid_address = bool(pattern_address.match(user_text))
+    if is_valid_address:
+        result = await addcopytradingaddress(user_id , user_text)
+        if result:
+            await message.reply(text="YOUR ADDRESS HAS BEEN ADDED" , reply_markup=backing_to_settings.as_markup())
+        else: 
+            await message.reply(text="No User Found" , reply_markup=backing_to_settings.as_markup())
+    else:
+        
+        backing_to_settings = InlineKeyboardBuilder()
+        backing_to_settings.button(text="🔙 Back Menu", callback_data=StartAction(type="user_settings").pack())
+        backing_to_settings.adjust(1)
+        await message.answer(f"you have enter the wrong address or wrong address pattern", reply_markup=backing_to_settings.as_markup())
+
+
+
 
 @user_settings_menu.message(StateFilter("deleteaddress"))
 async def handle_message_for_deleteaddress(message:types.Message)->None:
+    backing_to_settings = InlineKeyboardBuilder()
+    backing_to_settings.button(text="🔙 Back Menu", callback_data=StartAction(type="user_settings").pack())
+    backing_to_settings.adjust(1)
     user_text = message.text
-    print(user_text)
+    user_id = message.from_user.id
+    result = await deletecopyaddress(user_id , user_text)
+    if result:
+        await message.reply(text="YOUR ADDRESS HAS BEEN DELETED" , reply_markup=backing_to_settings.as_markup())
+    else:
+        
+        await message.reply(text="TEH ADDRESS OF USER NOT FOUND |OR| CANNOT BE DELETED " , reply_markup=backing_to_settings.as_markup())

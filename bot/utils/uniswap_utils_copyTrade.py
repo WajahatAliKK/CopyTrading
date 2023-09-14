@@ -66,7 +66,6 @@ class UniswapUtils:
         if priority_fee:
             gas_price = self.web3.from_wei(gas_price,'gwei') + int(priority_fee)
             gas_price = self.web3.to_wei(gas_price, 'gwei')
-
         try:
             while True:
                 try:
@@ -251,12 +250,7 @@ class UniswapUtils:
         ).estimate_gas({"from": self.wallet, "value": eth_amount})
         gas = int(gas * 1.2)
         # Calculate the deadline timestamp
-        
-
         data = contract.encodeABI(fn_name='swapExactETHForTokens', args=[amount_out_min, path, to, deadline])
-
-       
-
         try:
             while True:
                 try:
@@ -439,53 +433,6 @@ class UniswapUtils:
             print(f"Error during the swap: {e}")
             return False, None
 
-
-
-    def swap_v3(self, params: dict):
-        uniswap_v3_router_abi = self.uniswapv3_router_abi
-        contract = self.web3.eth.contract(address=self.router_address, abi=uniswap_v3_router_abi)
-        nonce = self.web3.eth.get_transaction_count(self.address) 
-        gas_price = self.web3.eth.gas_price
-        gas = 300000  # Adjust gas limit as needed
-
-        data = contract.functions.exactInputSingle(
-            params['token_in'],
-            params['token_out'],
-            params['fee'],
-            params['recipient'],
-            params['deadline'],
-            params['amount_in'],
-            params['amount_out_minimum'],
-            params['sqrt_price_limit_x96']
-        ).build_transaction({
-            'from': self.address,
-            'gas': gas,
-            'gasPrice': gas_price,
-            'nonce': nonce,
-        })['data']
-
-        transaction = {
-            'to': self.router_address,
-            'value': params['value'],
-            'gas': gas,
-            'gasPrice': gas_price,
-            'nonce': nonce,
-            'data': data,
-        }
-
-        try:
-            signed_tx = self.web3.eth.account.sign_transaction(transaction, self.private_key)
-            tx_hash = self.web3.eth.send_raw_transaction(signed_tx.rawTransaction)
-            tx_receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash)
-
-            if tx_receipt['status'] == 1:
-                return True, tx_hash.hex()
-            else:
-                return False, tx_hash.hex()
-        except Exception as e:
-            print(f"Error during the swap: {e}")
-            return False, None
-
     def get_v2_pair_address(self, token_a: str, token_b: str):
         token_a = self.web3.to_checksum_address(token_a)
         token_b = self.web3.to_checksum_address(token_b)
@@ -561,13 +508,6 @@ class UniswapUtils:
         price = reserve_b / reserve_a
         return price
 
-    def calculate_v3_price(self, token_a: str, token_b: str, nft_address: str):
-        positions = self.get_v3_positions(nft_address, self.address)
-        if positions[0] == 0 or positions[1] == 0:
-            raise ValueError("Invalid V3 positions")
-        price = positions[0] / positions[1]
-        return price
-
 
     def get_token_decimals(self, token_address: str):
         token_address = self.web3.to_checksum_address(token_address)
@@ -592,24 +532,6 @@ class UniswapUtils:
         name = contract.functions.balanceOf(self.wallet).call()
         return name
 
-
-    def get_amounts_out(self, amount_out, token_in, token_out):
-        uniswap_router_address = self.router_address
-        
-
-        # Contract ABIs
-        uniswap_router_abi = self.uniswapv2_router_abi
-        
-
-        # USDT amount to buy (in wei)
-        usdt_amount = amount_out
-
-        # Get the Uniswap contract
-        uniswap_router = self.web3.eth.contract(address=uniswap_router_address, abi=uniswap_router_abi)
-
-        # Estimate the amount of ETH needed
-        eth_amounts = uniswap_router.functions.getAmountsIn(usdt_amount, [token_in, token_out]).call()
-        return eth_amounts[0]
 
     def swap_eth_for_usdt(self,usdt_address, usdt_amount):
         try:

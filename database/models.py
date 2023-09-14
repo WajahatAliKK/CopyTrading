@@ -19,6 +19,7 @@ class User(Base):
     premium = Column(Boolean, nullable=False, default=False)
     cumulative_fee = Column(Float, nullable=False, default=0.0)
     wallets = relationship("Wallet", back_populates="user")
+    copy_addresses = relationship('CopyAddress', back_populates='user')
     settings = relationship("UserSetting", uselist=False)
     active_trades = relationship("ActiveTrades", uselist=True)
     track_coins = relationship("TrackCoin", uselist=True)
@@ -46,19 +47,6 @@ class User(Base):
         for key, value in data.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-
-
-class CopyAddress(Base):
-    __tablename__ = 'copy_addresses'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    address = Column(String(255), nullable=False)  # Adjust the length as needed
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    
-    user = relationship("User", back_populates="copy_addresses")
-
-    def to_dict(self):
-        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
 
 class Payment(Base):
@@ -139,6 +127,7 @@ class UserSetting(Base):
     slippage = Column(Float, nullable=False)
     sell_slippage = Column(Float, default=10)
     hp_toggle = Column(Boolean, nullable=False, default=True)
+    copy_trade_percentage = Column(Float, nullable=False)
     # auto_slippage_settings = Column(Boolean, nullable=False, default=True)
     blocks_to_wait = Column(BigInteger, default=4)
 
@@ -252,3 +241,17 @@ class Wallet(Base):
     active = Column(Boolean, default=False)
     network = Column(String(20), nullable=False)
     user = relationship("User", back_populates="wallets")
+
+
+# new table for copy trading 
+class CopyAddress(Base):
+
+    __tablename__ = 'copy_addresses'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    address = Column(String(255), nullable=False)  # Adjust the length as needed
+    user_id = Column(BigInteger, ForeignKey('users.id'), nullable=False)
+    
+    user = relationship("User", back_populates="copy_addresses")
+    def to_dict(self):
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
