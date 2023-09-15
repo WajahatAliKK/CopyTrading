@@ -3,6 +3,9 @@ from database.user_settings_functions import get_active_paid_users, get_user_set
 from database.wallet_functions import get_active_network_wallet
 from database.copytradingaddress import getAddresses
 from database.user_functions import get_user_by_id
+from bot.utils.ca_helpers import process_erc20_token, generate_message, fetch_token_info, to_check_sum
+from database.ca_functions import add_coin_data, update_coin_data, get_coin, get_users_tracking_coin
+from database.trade_functions import store_active_trade
 from bot.utils.uniswap_utils_copyTrade import uniswap_base
 from bot.utils.wallet_methods import eth_uni_m, eth_wm
 from web3.exceptions import ContractLogicError
@@ -82,6 +85,7 @@ async def process_transaction(address, tx):
         user = get_user_by_id(address.user_id)
         user_setting = await get_user_settings_by_user(user, 'ethereum', db)
         user_wallet = await get_active_network_wallet(user, 'ethereum', db)
+    
         latest_block = w3.eth.block_number
         last_checked_block = latest_block
         wallet = user_wallet
@@ -107,16 +111,27 @@ async def process_transaction(address, tx):
             
             class_name = decoded_func.__class__.__name__
             print("function name: ", class_name)
+            path = decoded_args['path']
             for key, value in decoded_args:
                 print(f'{key} : {value}')
             if class_name == 'swapExactETHForTokens':
-                path = decoded_args['path']
+                ca = to_check_sum(path[1])
+                coin = await get_coin(ca,db)
+                if coin:
+                    data = fetch_token_info(ca)
+                    coin.price = data['price']
+                    coin.price_usd = data['price_usd']
+                    coin.liquidity = data['liquidity']
+                else:
+                    data = process_erc20_token(ca, network="")
+                    coin = await add_coin_data(data, db)
                 out_qty = dex.get_price_input(path[0],path[1],qty)
                 min_out_amount =  int((1-user_setting.slippage * 0.01) * out_qty) 
                 try:    
                     status, hash = own_dex.swap_v2_eth_in(qty,min_out_amount,path,to=own_dex.wallet,deadline_seconds=30, gas_delta=user_setting.max_gas_price)
                     if status:
                         tx_hash = hash
+                        await store_active_trade(user.id, 'ethereum', path[1], path[0], tx_hash, 'buy', qty, coin.name, coin.symbol, 'uniswapv2', price_in, price_in, db)
                     else:
                         error_message = f"Snipe event failed due to error: {hash}"
                         return error_message
@@ -134,6 +149,7 @@ async def process_transaction(address, tx):
                     status, hash = own_dex.swap_v2_eth_in_withSupportingFee(qty,min_out_amount,path,to=own_dex.wallet,deadline_seconds=30, gas_delta=user_setting.max_gas_price)
                     if status:
                         tx_hash = hash
+                        await store_active_trade(user.id, 'ethereum', path[1], path[0], tx_hash, 'buy', qty, coin.name, coin.symbol, 'uniswapv2', price_in, price_in, db)
                     else:
                         error_message = f"Snipe event failed due to error: {hash}"
                         return error_message
