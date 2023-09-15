@@ -70,6 +70,17 @@ async def get_no_of_addresses(userchat_id:str):
         else:
             return 0 , 0 
 
+
+async def getAddresses():
+    async with db.AsyncSession() as session:
+        result = await session.execute(select(CopyAddress))
+        addresses = result.scalars().all()
+        if addresses:
+            return addresses
+        else:
+            return False
+
+
 async def get_percentgae_of_copy_trade(users_IID):
     async with db.AsyncSession() as session:
 

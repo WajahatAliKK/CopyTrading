@@ -18,6 +18,15 @@ async def get_user_by_chat_id(chat_id, session):
         user = result.scalar_one_or_none()
         return user
 
+async def get_user_by_id(id):
+    # return session.query(User).options(joinedload(User.wallets)).filter(User.chat_id == chat_id).one_or_none()
+    async with db.AsyncSession() as session:
+        result = await session.execute(
+            select(User).options(selectinload(User.wallets)).where(User.id == id)
+        )
+        user = result.scalar_one_or_none()
+        return user
+
 async def add_user(user_data: types.User, db: Client) -> User:
     user = User(
         username=user_data.username,

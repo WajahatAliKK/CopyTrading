@@ -1,9 +1,14 @@
 from web3 import Web3, HTTPProvider
 from database.user_settings_functions import get_active_paid_users, get_user_settings_by_user
 from database.wallet_functions import get_active_network_wallet
+from database.copytradingaddress import getAddresses
+from database.user_functions import get_user_by_id
 from bot.utils.uniswap_utils_copyTrade import uniswap_base
 from bot.utils.wallet_methods import eth_uni_m, eth_wm
+from web3.exceptions import ContractLogicError
+import asyncio
 # from bot.utils.config import *
+from bot.db_client import db
 import json
 import os
 import time
@@ -45,8 +50,38 @@ swapExactTokensForETH = b'\x18\xcb\xaf\xe5'
 swapExactETHForTokens = b'\x7f\xf3\x6a\xb5'
 # Function to check for and replicate trades
 async def check_and_replicate_trades():
-        user_setting = await get_user_settings_by_user(user, ethereum, db)
-        user_wallet = await get_active_network_wallet(user, self.network, db)
+        addresses = await getAddresses()
+        while True:
+            # Get new blocks since the last checked block
+            latest_block = w3.eth.block_number
+            if latest_block > last_checked_block:
+                for block_number in range(last_checked_block + 1, latest_block + 1):
+                    print(block_number)
+                    block = w3.eth.get_block(block_number, full_transactions=True)
+                    for tx in block.transactions:
+                        # Create a list of tasks
+                        tasks = []
+                        for address in addresses:
+                            task = process_transaction(address, tx)
+                            tasks.append(task)
+                        # Run the tasks concurrently using asyncio
+                        loop = asyncio.get_event_loop()
+                        results = loop.run_until_complete(asyncio.gather(*tasks))
+
+                        # Process the results if needed
+                        for result in results:
+                            if result is not None:
+                                print(result)  # Handle errors or results as needed        
+
+                last_checked_block = latest_block
+                time.sleep(5)  # Check for new blocks every minute (adjust as needed)
+
+# Define your trade condition logic here
+async def process_transaction(address, tx):
+    if 'to' in tx and tx['to'] == address:
+        user = get_user_by_id(address.user_id)
+        user_setting = await get_user_settings_by_user(user, 'ethereum', db)
+        user_wallet = await get_active_network_wallet(user, 'ethereum', db)
         latest_block = w3.eth.block_number
         last_checked_block = latest_block
         wallet = user_wallet
@@ -54,65 +89,62 @@ async def check_and_replicate_trades():
         dex.private_key = eth_wm.decrypt_seed(wallet.wallet_encrypted_seed)
         own_dex = uniswap_base
         qty = eth_wm.web3.to_wei(user_setting.amount_per_snipe, 'ether')
-        while True:
-            # Get new blocks since the last checked block
-            latest_block = w3.eth.block_number
-            if latest_block > last_checked_block:
-                for block_number in range(last_checked_block + 1, latest_block + 1):
-                    print(block_number)
-                    if block_number: 
-                        block = w3.eth.get_block(block_number, full_transactions=True)
-                        for tx in block.transactions:
-                            # print('From : ', tx['from'])
-                            # print('To : ', tx['to'])
-                            if 'input' in tx and (
-                                tx['input'].startswith(swapETHForExactTokens) or
-                                tx['input'].startswith(swapExactTokensForETHSupportingFeeOnTransferTokens) or
-                                tx['input'].startswith(swapExactETHForTokensSupportingFeeOnTransferTokens) or
-                                tx['input'].startswith(swapExactTokensForETH) or
-                                tx['input'].startswith(swapExactETHForTokens)
-                                ):
-                                # Identifying trades based on specific criteria (e.g., function calls or contract interactions)
-                                # Checking if the transaction interacts with a router contract of uniswap v2.
-                                # Inspecting the transaction data and using ABI for decoding.
-                                # If a trade condition is met, replicating the trade.
-                                # Note: This is a highly inplemented as per our requirement example and actual trade conditions can be complex.
-                                decoded_input = router_contract.decode_function_input(tx['input'])
-                                decoded_args = decoded_input[1]
-                                decoded_func = decoded_input[0]
-                                
-                                class_name = decoded_func.__class__.__name__
-                                print("function name: ", class_name)
-                                if class_name == 'swapExactETHForTokens':
-                                    amountOutMin = decoded_args['amountOutMin']
-                                    path = decoded_args['path']
-                                    out_qty = dex.get_price_input(path[0],path[1],qty)
-                                    min_out_amount =  int((1-user_setting.slippage * 0.01) * out_qty) 
-                                    try:    
-                                        status, hsah = own_dex.swap_v2_eth_in(qty,min_out_amount,path,to=own_dex.wallet,deadline_seconds=30, gas_delta=user_setting.max_gas_price)
-                                        if status:
-                                            tx_hash = hsah
-                                        else:
-                                            self.logger.error(f"{self.name} Swap returned False")
-                                            await self.send_trade_fail_alert(user.chat_id, symbol,own_dex.wallet, error_message=f"Snipe event failed for {symbol} | {self.name.split('_')[0]} due to error: {hsah}")
-                                            return
-                                        # resp = dex.make_trade(token_in, contract_address, qty)
-                                        # tx_hash = resp.hex()
-                                    except ContractLogicError as e:
-                                            error_message = e
-                                            self.logger.error(f"Error while making the trade: {contract_address} {e}")
-                                            # await self.send_trade_fail_alert(user.chat_id,symbol,wallet.wallet_address,error_message)
-                                            return
-                                
+        if 'input' in tx and (
+            # tx['input'].startswith(swapETHForExactTokens) or
+            # tx['input'].startswith(swapExactTokensForETHSupportingFeeOnTransferTokens) or
+            tx['input'].startswith(swapExactETHForTokensSupportingFeeOnTransferTokens) or
+            # tx['input'].startswith(swapExactTokensForETH) or
+            tx['input'].startswith(swapExactETHForTokens)
+            ):
+            # Identifying trades based on specific criteria (e.g., function calls or contract interactions)
+            # Checking if the transaction interacts with a router contract of uniswap v2.
+            # Inspecting the transaction data and using ABI for decoding.
+            # If a trade condition is met, replicating the trade.
+            # Note: This is a highly inplemented as per our requirement example and actual trade conditions can be complex.
+            decoded_input = router_contract.decode_function_input(tx['input'])
+            decoded_args = decoded_input[1]
+            decoded_func = decoded_input[0]
+            
+            class_name = decoded_func.__class__.__name__
+            print("function name: ", class_name)
+            for key, value in decoded_args:
+                print(f'{key} : {value}')
+            if class_name == 'swapExactETHForTokens':
+                path = decoded_args['path']
+                out_qty = dex.get_price_input(path[0],path[1],qty)
+                min_out_amount =  int((1-user_setting.slippage * 0.01) * out_qty) 
+                try:    
+                    status, hash = own_dex.swap_v2_eth_in(qty,min_out_amount,path,to=own_dex.wallet,deadline_seconds=30, gas_delta=user_setting.max_gas_price)
+                    if status:
+                        tx_hash = hash
+                    else:
+                        error_message = f"Snipe event failed due to error: {hash}"
+                        return error_message
+                    # resp = dex.make_trade(token_in, contract_address, qty)
+                    # tx_hash = resp.hex()
+                except ContractLogicError as e:
+                        error_message = e
+                        print(f"Error while making the trade: {path[1]} {e}")
+                        # await self.send_trade_fail_alert(user.chat_id,symbol,wallet.wallet_address,error_message)
+                        return
+            elif class_name == 'swapExactETHForTokensSupportingFeeOnTransferTokens':
+                price_in = dex.get_price_input(path[0], path[1], qty)
+                min_out_amount = int((1 - user_setting.sell_slippage * 0.01) * price_in)
+                try:    
+                    status, hash = own_dex.swap_v2_eth_in_withSupportingFee(qty,min_out_amount,path,to=own_dex.wallet,deadline_seconds=30, gas_delta=user_setting.max_gas_price)
+                    if status:
+                        tx_hash = hash
+                    else:
+                        error_message = f"Snipe event failed due to error: {hash}"
+                        return error_message
+                    # resp = dex.make_trade(token_in, contract_address, qty)
+                    # tx_hash = resp.hex()
+                except ContractLogicError as e:
+                        error_message = e
+                        print(f"Error while making the trade: {path[1]} {e}")
+                        # await self.send_trade_fail_alert(user.chat_id,symbol,wallet.wallet_address,error_message)
+                        return
 
-                last_checked_block = latest_block
-                time.sleep(5)  # Check for new blocks every minute (adjust as needed)
-
-# Define your trade condition logic here
-def is_trade(tx):
-    # Example: Check if the transaction interacts with a specific contract
-    # You may need to inspect tx['input'] or use ABI to decode.
-    return True
 
 # Replicate a trade
 def replicate_trade(tx):

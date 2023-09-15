@@ -289,6 +289,70 @@ class UniswapUtils:
             self.logger.error(f"Error during the swap: {e}")
             return False, None
 
+
+    def swap_v2_eth_in_withSupportingFee(self, eth_amount: int, amount_out_min: int, path: list, to: str, deadline_seconds: int, gas_delta=None):
+        router_address = self.router_address
+        uniswap_v2_router_abi = self.uniswapv2_router_abi
+        contract = self.web3.eth.contract(address=router_address, abi=uniswap_v2_router_abi)
+        nonce = self.web3.eth.get_transaction_count(self.wallet)
+        gas_price = self.web3.eth.gas_price
+        
+        deadline = int(time.time()) + deadline_seconds
+        if gas_delta:
+            gas_price = self.web3.from_wei(gas_price,'gwei') + int(gas_delta)
+            gas_price = self.web3.to_wei(gas_price, 'gwei')
+        # if self.name == "uniswap_v2":
+        #     gas = 350000  # Adjust gas limit as needed
+        # else:
+        gas = contract.functions.swapExactETHForTokensSupportingFeeOnTransferTokens(
+            amount_out_min,
+            path,
+            to,
+            deadline
+        ).estimate_gas({"from": self.wallet, "value": eth_amount})
+        gas = int(gas * 1.2)
+        # Calculate the deadline timestamp
+        data = contract.encodeABI(fn_name='swapExactETHForTokensSupportingFeeOnTransferTokens', args=[amount_out_min, path, to, deadline])
+        try:
+            while True:
+                try:
+                    transaction = {
+                    'to': router_address,
+                    'value': eth_amount,  # Set the value to the amount of ETH you want to swap
+                    'gas': gas,
+                    'gasPrice': gas_price,
+                    'nonce': nonce,
+                    'chainId': self.web3.eth.chain_id,
+                    'data': data,
+                }
+                    signed_tx = self.web3.eth.account.sign_transaction(transaction, self.private_key)
+                    tx_hash = self.web3.eth.send_raw_transaction(signed_tx.rawTransaction)
+                    tx_hash_hex = tx_hash.hex()  # Convert the transaction hash to its hexadecimal representation
+                    self.logger.info(f"Hex of transaction is: {tx_hash_hex}")
+                    return True, tx_hash_hex
+                    # tx_receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash)
+                    # if tx_receipt['status'] == 1:
+                    #     return True, tx_hash.hex()
+                    # else:
+                    #     return False, tx_hash.hex()
+                    break
+                except Exception as e:
+                    if "nonce" in str(e) or "future" in str(e):
+                        nonce+=1
+                        continue
+                    elif "underprice" in str(e):
+                        gas_price = self.web3.from_wei(gas_price,'gwei') + 10
+                        gas_price = self.web3.to_wei(gas_price, 'gwei')
+                        continue
+                    return False, str(e)
+                
+            
+        except Exception as e:
+            self.logger.error(f"Error during the swap: {e}")
+            return False, None
+
+    
+
     def swap_token_to_eth_old(self, token_amount: int, amount_out_min: int, path: list, to: str, deadline_seconds: int, gas_delta=None):
         router_address = self.router_address
         uniswap_v2_router_abi = self.uniswapv2_router_abi
