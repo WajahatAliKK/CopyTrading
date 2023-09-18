@@ -31,12 +31,14 @@ def user_settings_keyboard(network):
             [
                 InlineKeyboardButton(text="🧐 Scam Spotter", callback_data=UserSettingsAction(column="honeypot_settings", network=network).pack())
             ],
-
             [
-                InlineKeyboardButton(text="© Start Copy Trading", callback_data=UserSettingsAction(column="startcopytradebtn" , network=network).pack())
+                InlineKeyboardButton(text="▶️🛑 Start/Stop Copy Trading", callback_data=UserSettingsAction(column="copy_trade_setting" , network=network).pack())
             ],
             [
-                InlineKeyboardButton(text="↕ Update Copy Trade Percentage" , callback_data=UserSettingsAction(column="updatecopytradepercentage" , network=network).pack())
+                InlineKeyboardButton(text="⚙️📈 Copy Trade Settings", callback_data=UserSettingsAction(column="startcopytradebtn" , network=network).pack())
+            ],
+            [
+                InlineKeyboardButton(text="〽️ Update Copy Trade Percentage" , callback_data=UserSettingsAction(column="updatecopytradepercentage" , network=network).pack())
             ],
             [InlineKeyboardButton(text="🏡 Home Menu", callback_data=Back(type="main_menu").pack())],
         ]

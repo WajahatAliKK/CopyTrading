@@ -53,10 +53,10 @@ def get_settings_message(setting):
 
     message = f'''
                 🛠️ *Current Sniper Configurations*:
-
                 🎩 *Snipe Amount:* {setting.amount_per_snipe} {unit}
                 ⚡ *Gas Budget:* {setting.max_gas_price} Gwei
                 🔮 *Repeat Purchase:* {'✅' if setting.duplicate_buy else '❌'}
+                📈 *Copy Trading:* {'✅' if setting.copy_trading else '❌'}
                 🌊 *Min. Liquidity:* {setting.min_liquidity}
                 ⏳ *Wait Blocks:* {setting.blocks_to_wait}
                 🌀 *Trade Slippage:* {setting.slippage} %
@@ -148,6 +148,15 @@ async def hp_toggle_cb(query: types.CallbackQuery, callback_data: CallbackData, 
     text1 = get_settings_message(new_settings)
     await query.message.edit_text(text=text1, reply_markup=user_settings_keyboard(network=new_settings.network))
     await query.answer(text="Scam Detection Settings changed!")
+
+@user_settings_menu.callback_query(UserSettingsAction.filter(F.column=="copy_trade_setting"), StateFilter("*"))
+async def hp_toggle_cb(query: types.CallbackQuery, callback_data: CallbackData, state: FSMContext):
+    setting = await get_user_settings(query.from_user.id, "ethereum", db)
+    setting.copy_trading = not setting.copy_trading if setting.copy_trading is not None else True
+    new_settings = await set_user_setting(setting, db)
+    text1 = get_settings_message(new_settings)
+    await query.message.edit_text(text=text1, reply_markup=user_settings_keyboard(network=new_settings.network))
+    await query.answer(text="Copy Trade Settings changed!")
 
 
 @user_settings_menu.callback_query(UserSettingsAction.filter(F.column=="auto_sell"), StateFilter("*"))
