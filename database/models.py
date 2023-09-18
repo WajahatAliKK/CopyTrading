@@ -118,6 +118,7 @@ class UserSetting(Base):
     network = Column(String(20),nullable=False)
     auto_buy = Column(Boolean, nullable=False, default=True)
     auto_sell = Column(Boolean, nullable=False, default=True)
+    copy_trading = Column(Boolean, nullable=False, default=False)
     amount_per_snipe = Column(Float, nullable=False)
     max_gas_price = Column(BigInteger, nullable=False)
     duplicate_buy = Column(Boolean, nullable=False, default=False)
